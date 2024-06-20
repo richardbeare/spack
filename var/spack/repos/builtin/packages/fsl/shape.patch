@@ -1,0 +1,11 @@
+--- a/src/mist/common/shape.cpp	2024-06-20 16:11:57.680069685 +1000
++++ b/src/mist/common/shape.cpp	2024-06-20 16:11:39.196115313 +1000
+@@ -354,7 +354,7 @@
+     for (vtkIdType i = 0; i < cells->GetNumberOfIds(); i++)
+     {
+         vtkIdType npoints;
+-        vtkIdType *points;
++        vtkIdType const *points;
+ 
+         m_polyData->GetCellPoints(cells->GetId(i), npoints, points);
+ 

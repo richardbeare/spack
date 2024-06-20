@@ -9,6 +9,7 @@ import os
 from spack.package import *
 from spack.util.environment import EnvironmentModifications
 
+import pathlib
 
 class Fsl(Package, CudaPackage):
     """FSL is a comprehensive library of analysis tools for FMRI, MRI and DTI
@@ -23,17 +24,19 @@ class Fsl(Package, CudaPackage):
     url = "file://{0}/fsl-5.0.10-sources.tar.gz".format(os.getcwd())
     manual_download = True
 
+    version("6.0.5.1", sha256="d8ab2ebc87d3e33ce1097dde18d8a55f62d4a27b45efc4f68adccfb6e8e1425c")
     version("6.0.5", sha256="df12b0b1161a26470ddf04e4c5d5d81580a04493890226207667ed8fd2b4b83f")
     version("6.0.4", sha256="58b88f38e080b05d70724d57342f58e1baf56e2bd3b98506a72b4446cad5033e")
     version("5.0.10", sha256="ca183e489320de0e502a7ba63230a7f55098917a519e8c738b005d526e700842")
 
     depends_on("python", type=("build", "run"))
+    depends_on("py-setuptools", type=("run"))
     depends_on("expat")
     depends_on("libx11")
     depends_on("glu")
     depends_on("iconv")
     depends_on("openblas", when="@6:")
-    depends_on("vtk@:8")
+    depends_on("vtk@:9")
 
     conflicts("cuda_arch=none", when="+cuda", msg="must select a CUDA architecture")
     conflicts("platform=darwin", msg="currently only packaged for linux")
@@ -41,16 +44,17 @@ class Fsl(Package, CudaPackage):
     patch("build_log.patch")
     patch("eddy_Makefile.patch", when="@6.0.4")
     patch("iconv.patch", when="^libiconv")
-    patch("fslpython_install_v5.patch", when="@:5")
-    patch("fslpython_install_v604.patch", when="@6.0.4")
+    #patch("fslpython_install_v5.patch", when="@:5")
+    #patch("fslpython_install_v604.patch", when="@6.0.4")
     patch("fslpython_install_v605.patch", when="@6.0.5")
+    patch("shape.patch", when="@6.0.5.1")
 
     # Allow fsl to use newer versions of cuda
-    patch(
-        "https://aur.archlinux.org/cgit/aur.git/plain/005-fix_cuda_thrust_include.patch?h=fsl",
-        sha256="9471addfc2f880350eedadcb99cb8b350abf42be1c0652ccddf49e34e5e48734",
-        level=2,
-    )
+    #patch(
+    #    "https://aur.archlinux.org/cgit/aur.git/plain/005-fix_cuda_thrust_include.patch?h=fsl",
+    #    sha256="9471addfc2f880350eedadcb99cb8b350abf42be1c0652ccddf49e34e5e48734",
+    #    level=2,
+    #)
 
     # allow newer compilers
     patch("libxmlpp_bool.patch")
@@ -63,10 +67,21 @@ class Fsl(Package, CudaPackage):
     # and without further modification, whether the computation is submitted to
     # a "local" system, like a workstation, or as a batch job to a cluster
     # queueing system, regardless of queue system type.
-    patch("fsl_sub_v5.patch", when="@:5")
-    patch("fsl_sub_v6.patch", when="@6:")
+    #patch("fsl_sub_v5.patch", when="@:5")
+    #patch("fsl_sub_v6.patch", when="@6:")
 
     def patch(self):
+
+        def insertOpenBlasIntoMakefiles(rootdir):
+            # -lopenblas needs to come after -lnewmat, otherwise the
+            # linker can't find the blas symbols
+            for makepath in pathlib.Path(rootdir).rglob("Makefile"):
+                makefilter = FileFilter(str(makepath))
+                makefilter.filter(r"-lnewmat ", r"-lnewmat -lopenblas ")
+                makefilter.filter(r"-lmiscmaths ", r"-lmiscmaths -lopenblas -lm ")
+                makefilter.filter(r"-lmeshclass ", r"-lmeshclass -lopenblas ")
+                makefilter.filter(r"-lpng ", r"-lpng -lm ")
+
         # Uncomment lines in source file to allow building from source
         with working_dir(join_path(self.stage.source_path, "etc", "fslconf")):
             sourced = FileFilter("fsl.sh")
@@ -86,6 +101,8 @@ class Fsl(Package, CudaPackage):
         if self.spec.satisfies("@6:"):
             settings_file = join_path(self.stage.source_path, "config", "buildSettings.mk")
             vtk_file = settings_file
+            # patch all the Makefiles - append -lopenblas to -lnewmat entries
+            insertOpenBlasIntoMakefiles(self.stage.source_path)
         else:
             settings_file = join_path(
                 self.stage.source_path, "config", "linux_64-gcc4.8", "systemvars.mk"
@@ -102,6 +119,9 @@ class Fsl(Package, CudaPackage):
         build_settings.filter(r"(^CC)\s*=.*", r"\1 = {0}".format(spack_cc))
         build_settings.filter(r"(^CXX)\s*=.*", r"\1 = {0}".format(spack_cxx))
         build_settings.filter(r"(^CXX11)\s*=.*", r"\1 = {0}".format(spack_cxx))
+
+        openblas_lib_dir = self.spec["openblas"].prefix.lib
+        #build_settings.filter(r"(^LIB_NEWMAT)\s*=.*", r"\1 = {0} -lopenblas".format(openblas_lib_dir))
 
         vtk_suffix = self.spec["vtk"].version.up_to(2)
         vtk_lib_dir = self.spec["vtk"].prefix.lib64
