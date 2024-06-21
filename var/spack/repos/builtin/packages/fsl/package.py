@@ -30,7 +30,7 @@ class Fsl(Package, CudaPackage):
     version("5.0.10", sha256="ca183e489320de0e502a7ba63230a7f55098917a519e8c738b005d526e700842")
 
     depends_on("python", type=("build", "run"))
-    depends_on("py-setuptools", type=("run"))
+    depends_on("py-setuptools")
     depends_on("expat")
     depends_on("libx11")
     depends_on("glu")
@@ -202,7 +202,8 @@ class Fsl(Package, CudaPackage):
 
         with spack.util.environment.preserve_environment(*vars_to_unset):
             for v in vars_to_unset:
-                del os.environ[v]
+                if v in os.environ:
+                    del os.environ[v]
 
             script = Executable(join_path(prefix, "etc", "fslconf", "post_install.sh"))
             script("-f", prefix)
